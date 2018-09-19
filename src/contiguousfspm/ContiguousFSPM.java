@@ -107,7 +107,7 @@ public class ContiguousFSPM {
         return patterns;
     }
     /**
-     * main function
+     * Main function
      * @param outputPath output file of discovered frequent patterns
      * @throws IOException 
      */
