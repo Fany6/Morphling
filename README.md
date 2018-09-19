@@ -12,7 +12,7 @@ Dependency:
 
 Download and install:
 
-•	We provide an executable JAR file for command line usage, you don’t have to build the source code.
+•	We provide an executable JAR file in dist directory for command line usage, you don’t have to build the source code.
 
 •	A user-interface is provided for non-experience Linux/Unix users. It is an executable JAR file, which can be launched directly.
 
