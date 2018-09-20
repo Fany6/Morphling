@@ -33,12 +33,13 @@ public class MorphReleaseV1 {
             if (!paramLoader.siFileMode){
                 System.out.println("fragMean: " + paramLoader.fragMean + " fragStd: " + paramLoader.fragStd 
                 + " readLen: " + paramLoader.readLen + " clustD: " + paramLoader.clusteringDist);
-
+                System.out.println("Working directory: " + paramLoader.workDir);
+                
                 SignalReader myReader = new SignalReader(paramLoader.fragMean, paramLoader.fragStd, paramLoader.cutStd, 
                         paramLoader.readLen, paramLoader.clusteringDist, paramLoader.minMapQ);
                 myReader.doWork(paramLoader.bamFile, paramLoader.fastaIndexFile, paramLoader.chr, paramLoader.givenRegionS, paramLoader.givenRegionE, paramLoader.superitemOut, paramLoader.abnormalSignalOut); 
 
-
+                
                 SequenceDatabase sequenceDatabase = new SequenceDatabase(); 
                 int minSup = 50;
 

@@ -28,16 +28,18 @@ public class terminalParamLoader {
     public String chr = null;
     public int givenRegionS;
     public int givenRegionE;
-    public String bamFile = null;
-    public String fastaFile = null;
+    public String workDir;
+    public String bamFile;
+    public String fastaFile;
     public String fastaIndexFile;
     public String regionMaskFile;
     public String superitemOut;
     public String svOut;
-    public String abnormalSignalOut = null;
-    public String mergedPatternOut = null;
-    public String frequentPatternOut = null;
-    public BufferedWriter susRegionWriter = null;
+    public String indelOut;
+    public String abnormalSignalOut;
+    public String mergedPatternOut;
+    public String frequentPatternOut;
+    public BufferedWriter susRegionWriter;
     public boolean hasParamInput = true;
     public boolean siFileMode = false;
     public terminalParamLoader(){        
@@ -62,18 +64,20 @@ public class terminalParamLoader {
         sb.append("bamFile=   given the path of your BAM file\n");
         sb.append("faFile=   given the path of your reference file\n");     
         sb.append("bamCfg=  given the bam configuration file\n");
-        sb.append("itemOut= output path of super-item file\n"); 
-        sb.append("svOut=   output path of discovered SVs\n");
+        
+        
+//        sb.append("itemOut= output path of super-item file\n"); 
+//        sb.append("svOut=   output path of discovered SVs\n");
         
         sb.append("cutStd=    given the cutoff in unit of the standard deviation (default=3)\n");
         sb.append("maxD=    given the maximum distance to cluster abnormal read pairs (default=readLen)\n");
         sb.append("minQ=    given the minimum mapping quality of read (default=10)\n");
         
-        sb.append("chrom=   given a specific region, process whole chromosome if coordinates are not given. e.g chr1:1000-2000\n");         
-        sb.append("freOut=  output path of frequent patterns (optional, default=None)\n");
-        sb.append("sigOut=  output path of abnormal alignments (optional, default=None)\n");
-        sb.append("patternOut=  output path of merged patterns (optional, default=None)\n");  
-        sb.append("indelOut=    output path of INDELS based on reads pileup (optional, default=None)\n");
+        sb.append("chrom=   given a specific region, process whole chromosome if coordinates are not given. optional (e.g chr1:1000-2000)\n");         
+        sb.append("freOut=  output path of frequent patterns (optional, default=False (True in work dir)\n");
+        sb.append("sigOut=  output path of abnormal alignments (optional, default=Flase (True in work dir)\n");
+        sb.append("patternOut=  output path of merged patterns (optional, default=False (Ture in work dir)\n");  
+        sb.append("indelOut=    output path of INDELS based on reads pileup (optional, default=False (True in work dir))\n");
         sb.append("regionMask=    exclude regions in file during SV discovery (optional, default=None)\n");
         
         sb.append("\n**** Mode Two: only run with Super-Item file (only support WG now) ****\n");
@@ -121,23 +125,25 @@ public class terminalParamLoader {
             if (argTokens[0].equals("itemOut")){
                 superitemOut = argTokens[1];
             }
-            if (argTokens[0].equals("sigOut")){
-                abnormalSignalOut = argTokens[1];
+            if (argTokens[0].equals("sigOut") && argTokens[0].equals("True")){
+                abnormalSignalOut = workDir + "wgs.abnormal.signals.txt";
             }
-            if (argTokens[0].equals("patternOut")){
-                mergedPatternOut = argTokens[1];
+            if (argTokens[0].equals("patternOut") && argTokens[0].equals("True")){
+                mergedPatternOut = workDir + "wgs.merged.patterns.txt";
             }
             if (argTokens[0].equals("svOut")){
                 svOut = argTokens[1];
             }
-            if (argTokens[0].equals("freOut")){
-                frequentPatternOut = argTokens[1];
+            if (argTokens[0].equals("freOut") && argTokens[0].equals("True")){
+                frequentPatternOut = workDir + "wgs.frequent.patterns.txt";
             }
             if (argTokens[0].equals("regionMask")){
                 regionMaskFile = argTokens[1];
             }
-        }
-        
+            if (argTokens[0].equals("indelOut") && argTokens[0].equals("True")){
+                indelOut = workDir + "wgs.indels.txt";
+            }
+        }        
         if (bamFile == null){
             siFileMode = true;
         }
@@ -159,6 +165,11 @@ public class terminalParamLoader {
                 readLen = Integer.parseInt(tokens[1]);
                 clusteringDist = readLen;
             }
+            if (tokens[0].equals("workDir")){
+                workDir = tokens[1];
+                superitemOut = workDir + "wgs.superitems.txt";
+                svOut = workDir + "wgs.predict.SVs.vcf";
+            }
         }
-    }
+    }    
 }
