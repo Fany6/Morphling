@@ -10,7 +10,7 @@ import java.util.Map.Entry;
 import Channels.MutSignal;
 import htsjdk.samtools.QueryInterval;
 import java.text.DecimalFormat;
-import htsjdk.samtools.util.*;
+
 /**
  *
  * @author jiadonglin
@@ -329,7 +329,9 @@ public class SuperItem implements Comparable<SuperItem>{
             else if (signal.getMutSignalType().equals("MDM") && longestD == -1){
                 longestD = signal.getLongestD();
             }
-            String signalQname = signal.getqName();
+            String signalQname = signal.getqName();           
+            
+            
             superitemRecordPos.add(signal.getRecordPos());
             superitemMateRecordPos.add(signal.getMateRecordPos());                        
             
@@ -379,7 +381,8 @@ public class SuperItem implements Comparable<SuperItem>{
         chromName = majoritySignal.getSignalRef();
         superItemPos = majoritySignal.getMutPos();
         weight = mutList.size();   
-
+        
+        
         if (!splitPosList.isEmpty()){
             splitAlignedPos = getMedian(splitPosList);
         }
@@ -560,6 +563,7 @@ public class SuperItem implements Comparable<SuperItem>{
         Map<Integer, Integer[]> matchedNucleotide = new HashMap<>();
         Map<Integer, Integer[]> clippedNucleotide = new HashMap<>();
         
+        // Use signal with the same type as super-item to build conensus sequence
         for (MutSignal signal : mutList){
             if (!signal.getMutSignalType().equals(type)){
                 continue;

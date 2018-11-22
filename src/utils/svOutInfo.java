@@ -17,11 +17,11 @@ public class svOutInfo {
     int start;
     int end;
     String pattern = "";
-    int linkType; // 1 mate linked. -1 self linked. 0 non-linkable
+    int supType; // 1 mate linked. -1 self linked. 0 non-linkable
     String linkTypeStr = "";
     int[] supEvi;
     int[] selfLinkedMapQ;
-    int[] selfLinkedWeight;
+    double[] selfLinkedAF;
     String[] selfLinkedItemTypes;
     // Used for saving SVs called from a pattern, usually > 100bp
     List<Integer> weights;
@@ -29,8 +29,11 @@ public class svOutInfo {
     List<Double> ratios;
     List<String> oris;
     int[] arpSpanBpMapQ;
-    int[] arpSpanBpWeight;
+    double[] arpSpanBpAF;
     String[] arpSpanBpItem;
+    
+    double arpInferBpAF;
+    double realignBpAF;
     
     int[] suspeticRegion;
     boolean isPassed = true;
@@ -55,7 +58,7 @@ public class svOutInfo {
             end = s;
         }
         pattern = patternStr;
-        linkType = linkFlag;
+        supType = linkFlag;
         supEvi = supEvidence;
         weights = itemWeight;
         suspeticRegion = susRegion;
@@ -64,19 +67,21 @@ public class svOutInfo {
         this.oris = oris;
     }
     
-    public svOutInfo(int s, int e, int linkFlag, int weight, int plusReadNum, int minusReadNum){
+    public svOutInfo(int s, int e, int linkFlag, int weight, double af, int plusReadNum, int minusReadNum){
         start = s;
         end = e;
         supEvi = new int[3];
+        realignBpAF = af;
         supEvi[0] = weight;
         supEvi[1] = plusReadNum;
         supEvi[2] = minusReadNum;
-        linkType = linkFlag;
-
+        supType = linkFlag;
     }
+    
+    
     @Override
     public String toString(){
-        if (linkType == 9 || linkType == -3 || linkType == -4 || linkType == -5){
+        if (supType == 9 || supType == -3 || supType == -4 || supType == -5){
             isPassed = false;
         }
         StringBuilder sb = new StringBuilder();
@@ -103,69 +108,71 @@ public class svOutInfo {
         sb.append(infoToString());
         return sb.toString();
     }
+    
     private String infoToString(){
         StringBuilder sb = new StringBuilder();
         sb.append("SupType=");
-        if (linkType == -5){
-            linkTypeStr = "MultiBP";
-            sb.append("MultiBP");
-        }
-        if (linkType == -4){
+//        if (supType == -5){
+//            linkTypeStr = "MultiBP";
+//            sb.append("MultiBP");
+//        }
+        if (supType == -4){
             linkTypeStr = "OEM";
             sb.append("OEM;");
             sb.append("OEMWeight=");
             sb.append(supEvi[1]);
         }       
         
-        if (linkType == -2){
+        if (supType == -2){
             linkTypeStr = "SMALL_INSERT";
             sb.append("SMALL_INSERT");
         }
         
-        if(linkType == -1){
+        if(supType == -1){
             linkTypeStr = "Self";
-            sb.append("Self");                        
+            sb.append("ARP_Self");                        
             sb.append(";LinkedMapQ=");
             sb.append(intArrayToString(selfLinkedMapQ));
             sb.append(";LinkedWeight=");
-            sb.append(intArrayToString(selfLinkedWeight));
+            sb.append(doubleArrayToString(selfLinkedAF));
             sb.append(";LinkedItem=");
             sb.append(strArrayToString(selfLinkedItemTypes));
         }
-        if(linkType == 0){
+        if(supType == 0){
             linkTypeStr = "None";
             sb.append("None");                        
         }
-        if (linkType == 1){
+        if (supType == 1){
             linkTypeStr = "ARP_Span";
             sb.append("ARP_Span");               
-            sb.append(";ARP_SUP=");
+            sb.append(";ARP_sup=");
             sb.append(supEvi[0]);
             sb.append(";BP_mapQ=");
             sb.append(intArrayToString(arpSpanBpMapQ));
-            sb.append(";BP_weight=");
-            sb.append(intArrayToString(arpSpanBpWeight));
+            sb.append(";BP_af=");
+            sb.append(doubleArrayToString(arpSpanBpAF));
             sb.append(";BP_item=");
             sb.append(strArrayToString(arpSpanBpItem));
+            
         }                
-        if (linkType == 2){
+        if (supType == 2){
             linkTypeStr = "ARP_Span&Split";
             sb.append("ARP_Span&Split;");            
-            sb.append("ARP_SUP=");
+            sb.append("ARP_sup=");
             sb.append(supEvi[0]);
-            sb.append(";Split_SUP=");
+            sb.append(";Split_sup=");
             sb.append(supEvi[3]);
             
         }
-        if (linkType == 3){
+        if (supType == 3){
             linkTypeStr = "Split";
             sb.append("Split;");
-            sb.append("Split_SUP=");
+            sb.append("Split_sup=");
             sb.append(supEvi[3]);
-            sb.append(";Split_mapQ=");
-            sb.append(supEvi[4]);
+//            sb.append(";Split_mapQ=");
+//            sb.append(supEvi[4]);
         }
-        if (linkType == 4){
+        if (supType == 4){
             linkTypeStr = "Self&Cross";
             sb.append("Self&Cross;");
             if (supEvi[0] != 0){
@@ -178,17 +185,17 @@ public class svOutInfo {
             sb.append(supEvi[2]);
             
         }
-        if (linkType == 5){
+        if (supType == 5){
             linkTypeStr = "Self&Split";
             sb.append("Self&Split;");            
-            sb.append("ARP_SHARE=");
+            sb.append("ARP_share=");
             sb.append(supEvi[0]);
-            sb.append(";Split_SUP=");
+            sb.append(";Split_sup=");
             sb.append(supEvi[3]);
             sb.append(";Split_mapQ=");
             sb.append(supEvi[4]);
         }
-        if (linkType == 6){
+        if (supType == 6){
             linkTypeStr = "Self&Split&Cross";
             sb.append("Self&Split&Cross");
             if (supEvi[0] != 0){
@@ -204,36 +211,38 @@ public class svOutInfo {
             sb.append(";CROSS_READ=");
             sb.append(supEvi[2]);
         }
-        if (linkType == 7){
+        if (supType == 7){
             linkTypeStr = "Split&Cross";
             sb.append("Split&Cross;"); 
-            sb.append("Split_SUP=");
+            sb.append("Split_sup=");
             sb.append(supEvi[3]);
-            sb.append(";Split_mapQ=");
-            sb.append(supEvi[4]);
-            sb.append(";CROSS_LEN=");
+//            sb.append(";Split_mapQ=");
+//            sb.append(supEvi[4]);
+            sb.append(";Cross_len=");
             sb.append(supEvi[1]);            
-            sb.append(";CROSS_READ=");
+            sb.append(";Cross_read=");
             sb.append(supEvi[2]);
         }
-        if (linkType == 8){
+        if (supType == 8){
             linkTypeStr = "Cross";
             sb.append("Cross");            
-            sb.append(";CROSS_LEN=");
+            sb.append(";Cross_len=");
             sb.append(supEvi[1]);            
-            sb.append(";CROSS_READ=");
+            sb.append(";Cross_read=");
             sb.append(supEvi[2]);
         }
-        if(linkType == 9){
+        if(supType == 9){
             linkTypeStr = "ARP_Infer";
             sb.append("ARP_Infer;");
-            sb.append("ARP_SUP=");
-            sb.append(supEvi[1]);
+            sb.append("ARP_sup=");
+            sb.append(supEvi[1]);            
         }
-        if (linkType == 10){
+        if (supType == 10){
             linkTypeStr = "Realign";
             sb.append("Realign;");
-            sb.append("AR=");
+            sb.append("AF=");
+            sb.append(realignBpAF);
+            sb.append(";AR=");
             sb.append(supEvi[0]);                      
             sb.append(";PR=");
             sb.append(supEvi[1]);            
@@ -247,12 +256,17 @@ public class svOutInfo {
         sb.append(intArrayToString(suspeticRegion));                           
         sb.append(";Weights=");
         sb.append(intListToString(weights));                
-        sb.append(";Ratio=");
+        sb.append(";AF=");
         sb.append(doubleListToString(ratios));
         sb.append(";Ori=");
         sb.append(strListToString(oris));
         return sb.toString();
     }
+        
+    public void setArpInferBpAF(double af){
+        arpInferBpAF = af;
+    }
+    
     private String intListToString(List<Integer> alist){
         StringBuilder sb = new StringBuilder();
         for (Integer ele : alist){
@@ -295,6 +309,17 @@ public class svOutInfo {
         return outStr;
     }
     
+    private String doubleArrayToString(double [] array){
+        StringBuilder sb = new StringBuilder();
+        for (double ele : array){
+            sb.append(ele);
+            sb.append(",");
+        }
+        String str = sb.toString();
+        String outStr = str.substring(0, str.length() - 1);
+        return outStr;
+    }
+    
     private String strArrayToString(String[] array){
         StringBuilder sb = new StringBuilder();
         for (String ele : array){
@@ -314,11 +339,11 @@ public class svOutInfo {
         this.oris = oris;
     }
     
-    public void setArpSpanInfo(int[] mapQ, int[] weight, String[] itemTypes){
+    public void setArpSpanInfo(int[] mapQ, double[] af, String[] itemTypes){
         arpSpanBpMapQ = mapQ;
-        arpSpanBpWeight = weight;
+        arpSpanBpAF = af;
         
-        if (linkType == 1){
+        if (supType == 1){
             arpSpanBpItem = itemTypes;
             if (itemTypes[0].contains("ARP") && !itemTypes[1].contains("ARP")){
                 isPassed = false;
@@ -333,11 +358,11 @@ public class svOutInfo {
         
     }
     
-    public void setSelfLinkedInfo(int[] mapQ, int[] weight, String[] itemTypes){
+    public void setSelfLinkedInfo(int[] mapQ, double[] af, String[] itemTypes){
         selfLinkedMapQ = mapQ;
-        selfLinkedWeight = weight;
+        selfLinkedAF = af;
         
-        if (linkType == -1){
+        if (supType == -1){
             selfLinkedItemTypes = itemTypes;
             if (itemTypes[0].contains("ARP") && !itemTypes[1].contains("ARP")){
                 isPassed = false;
@@ -387,15 +412,15 @@ public class svOutInfo {
         String svInfos = toString();
         if (end - start < 50) {            
             // Might be insertion
-            if (pattern.contains("ARP_SMALL_INSERT")){
-                start = suspeticRegion[0];
-                end = suspeticRegion[1];
-                
-                sb.append(chrName);
-                sb.append(svInfos);
-                regionWriter.write(sb.toString());
-                regionWriter.newLine(); 
-            }
+//            if (pattern.contains("ARP_SMALL_INSERT")){
+//                start = suspeticRegion[0];
+//                end = suspeticRegion[1];
+//                
+//                sb.append(chrName);
+//                sb.append(svInfos);
+//                regionWriter.write(sb.toString());
+//                regionWriter.newLine(); 
+//            }
         }
         else{
             if (end == -1){
@@ -411,7 +436,6 @@ public class svOutInfo {
                 regionWriter.write(sb.toString());
                 regionWriter.newLine();
             } 
-        }
-            
+        }                  
     }
 }

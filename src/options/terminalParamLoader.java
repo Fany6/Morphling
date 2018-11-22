@@ -12,6 +12,8 @@ import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  *
@@ -25,6 +27,7 @@ public class terminalParamLoader {
     public int cutStd = 3;
     public int clusteringDist;
     public int minMapQ = 10;
+    public int patternMaxSpan;
     public String chr = null;
     public int givenRegionS;
     public int givenRegionE;
@@ -42,6 +45,9 @@ public class terminalParamLoader {
     public BufferedWriter susRegionWriter;
     public boolean hasParamInput = true;
     public boolean siFileMode = false;
+    
+    public List<String> excludableRegion;
+    
     public terminalParamLoader(){        
         
     }
@@ -66,25 +72,25 @@ public class terminalParamLoader {
         sb.append("bamCfg=  given the bam configuration file\n");
         
         
-//        sb.append("itemOut= output path of super-item file\n"); 
-//        sb.append("svOut=   output path of discovered SVs\n");
-        
         sb.append("cutStd=    given the cutoff in unit of the standard deviation (default=3)\n");
         sb.append("maxD=    given the maximum distance to cluster abnormal read pairs (default=readLen)\n");
         sb.append("minQ=    given the minimum mapping quality of read (default=10)\n");
-        
+        sb.append("pMax=    a parameter control the max distance pattern can growth (default=2)\n");        
         sb.append("chrom=   given a specific region, process whole chromosome if coordinates are not given. optional (e.g chr1:1000-2000)\n");         
-        sb.append("freOut=  output path of frequent patterns (optional, default=False (True in work dir)\n");
-        sb.append("sigOut=  output path of abnormal alignments (optional, default=Flase (True in work dir)\n");
-        sb.append("patternOut=  output path of merged patterns (optional, default=False (Ture in work dir)\n");  
-        sb.append("indelOut=    output path of INDELS based on reads pileup (optional, default=False (True in work dir))\n");
-        sb.append("regionMask=    exclude regions in file during SV discovery (optional, default=None)\n");
+        
+          
+        sb.append("freOut=  output path of frequent patterns (optional, default=False)\n");
+        sb.append("sigOut=  output path of abnormal alignments (optional, default=Flase)\n");
+        sb.append("patternOut=  output path of merged patterns (optional, default=False)\n");  
+        sb.append("indelOut=    output path of INDELS based on reads pileup (optional, default=False)\n");
+        sb.append("regionMask=   regions to exclude during SV discovery (optional)\n");
         
         sb.append("\n**** Mode Two: only run with Super-Item file (only support WG now) ****\n");
-        sb.append("itemOut= super-item out file path\n"); 
+//        sb.append("itemOut= super-item out file path\n"); 
         sb.append("faFile=   given the path of your reference file\n");  
         sb.append("svOut=   output path of discovered SVs\n");
         sb.append("bamCfg=  given the bam configuration file\n");   
+        sb.append("pMax=    a parameter control the max distance pattern can growth (default=3)\n");
         
         System.out.println(sb.toString());
     }
@@ -105,6 +111,11 @@ public class terminalParamLoader {
             if (argTokens[0].equals("minQ")){
                 minMapQ = Integer.parseInt(argTokens[1]);
             }
+            
+            if (argTokens[0].equals("pMax")){
+                patternMaxSpan = fragMean + Integer.parseInt(argTokens[1]) * fragStd;
+            }
+            
             if (argTokens[0].equals("chrom")){
                 String givenRegion = argTokens[1];
                 if (givenRegion.length() == 1){
@@ -126,7 +137,7 @@ public class terminalParamLoader {
                 superitemOut = argTokens[1];
             }
             if (argTokens[0].equals("sigOut") && argTokens[0].equals("True")){
-                abnormalSignalOut = workDir + "wgs.abnormal.signals.txt";
+                abnormalSignalOut = "wgs.abnormal.signals.txt";
             }
             if (argTokens[0].equals("patternOut") && argTokens[0].equals("True")){
                 mergedPatternOut = workDir + "wgs.merged.patterns.txt";
@@ -147,7 +158,9 @@ public class terminalParamLoader {
         if (bamFile == null){
             siFileMode = true;
         }
+        loadExcluableRegion();
     }
+    
     private void readBamConfigFile(String cfgFile) throws IOException{
         FileInputStream fin = new FileInputStream(new File(cfgFile));
         BufferedReader myInput = new BufferedReader(new InputStreamReader(fin));
@@ -167,9 +180,24 @@ public class terminalParamLoader {
             }
             if (tokens[0].equals("workDir")){
                 workDir = tokens[1];
-                superitemOut = workDir + "wgs.superitems.txt";
-                svOut = workDir + "wgs.predict.SVs.vcf";
+                superitemOut = workDir + "/wgs.all.superitems.txt";
+                svOut = workDir + "/morph.vcf";
             }
         }
-    }    
+    }   
+    
+    private void loadExcluableRegion() throws IOException{
+        String cenTelRegionFile = "/Users/jiadonglin/SV_data/ref_genome/centromeres.bed";
+        String gapRegionFile = "/Users/jiadonglin/SV_data/ref_genome/hg38.gap.bed";
+        String lowMapQRegionFile = "/Users/jiadonglin/SV_data/ref_genome/hg38.RegionsExcludable.bed";
+        
+//        String cenTelRegionFile = workDir + "centromeres.bed";
+//        String gapRegionFile = workDir + "hg38.gap.bed";
+//        String lowMapQRegionFile = workDir + "hg38.RegionsExcludable.bed";
+        
+        excludableRegion = new ArrayList<>(3);
+        excludableRegion.add(cenTelRegionFile);
+        excludableRegion.add(gapRegionFile);
+        excludableRegion.add(lowMapQRegionFile);
+    }
 }

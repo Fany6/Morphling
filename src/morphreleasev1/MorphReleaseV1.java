@@ -14,6 +14,7 @@ import options.terminalParamLoader;
 import superitemGenerator.SignalReader;
 import superitemGenerator.fileReader;
 
+import java.util.*;
 
 /**
  *
@@ -37,19 +38,22 @@ public class MorphReleaseV1 {
                 
                 SignalReader myReader = new SignalReader(paramLoader.fragMean, paramLoader.fragStd, paramLoader.cutStd, 
                         paramLoader.readLen, paramLoader.clusteringDist, paramLoader.minMapQ);
+                
                 myReader.doWork(paramLoader.bamFile, paramLoader.fastaIndexFile, paramLoader.chr, paramLoader.givenRegionS, paramLoader.givenRegionE, paramLoader.superitemOut, paramLoader.abnormalSignalOut); 
 
                 
                 SequenceDatabase sequenceDatabase = new SequenceDatabase(); 
                 int minSup = 50;
-
+                
+                System.out.println("Super-Item generation completed!!\n\nSV path: " + paramLoader.svOut);
+                
                 BufferedWriter svRegionWriter = new BufferedWriter(new FileWriter(paramLoader.svOut));
 
 
                 sequenceDatabase.loadSequencesFromFile(paramLoader.superitemOut, svRegionWriter);
 
-                ContiguousFSPM algoContiguousFSPM = new ContiguousFSPM(minSup, paramLoader.fragMean);
-                algoContiguousFSPM.setParams(myReader.chromNameMap, true, paramLoader.regionMaskFile);
+                ContiguousFSPM algoContiguousFSPM = new ContiguousFSPM(minSup, paramLoader.patternMaxSpan);
+                algoContiguousFSPM.setParams(myReader.chromNameMap, paramLoader.regionMaskFile);
                 algoContiguousFSPM.runAlgorithm(sequenceDatabase, paramLoader.frequentPatternOut, paramLoader.mergedPatternOut, paramLoader.susRegionWriter, svRegionWriter, paramLoader.fastaFile);
                 algoContiguousFSPM.printAlgoStatistics();
             }
@@ -64,10 +68,15 @@ public class MorphReleaseV1 {
 
                 ContiguousFSPM algoContiguousFSPM = new ContiguousFSPM(minSup, paramLoader.fragMean);
                 fileReader reader = new fileReader();                
-                algoContiguousFSPM.setParams(reader.getIdxToChrName(paramLoader.fastaIndexFile), true, paramLoader.regionMaskFile);
+                algoContiguousFSPM.setParams(reader.getIdxToChrName(paramLoader.fastaIndexFile), paramLoader.regionMaskFile);
                 algoContiguousFSPM.runAlgorithm(sequenceDatabase, paramLoader.frequentPatternOut, paramLoader.mergedPatternOut, paramLoader.susRegionWriter, svRegionWriter, paramLoader.fastaFile);
                 algoContiguousFSPM.printAlgoStatistics();
-            }                                    
+            } 
         }
+
+
     }
 }
+
+  
+

@@ -47,7 +47,7 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
     int patternLeftMostPos; // position of the first SuperItem in the pattern
     int patternRightMostPos; // position of the last SuperItem in the pattern
     int patternLeftMostIntervalStart; // read position of the left most interval of the pattern
-    int[] linkedPatterns = new int[2]; // for a self linked pattern, save its linked coord for boundary estimation
+    int[] linkedSuperItems = new int[2]; // for a self linked pattern, save its linked coord for boundary estimation
     int numOfLinkedEvidence = 0;
     int splitReadSup = 0;
     int splitReadMapQ = 0;
@@ -58,14 +58,19 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
     int[] splitAlignCoords;
     int[] crossSupInfo;
     
-    // some configuration of self-linked patterns
-    int[] selfLinkedSuperItemMapQ;
-    int[] selfLinkedSuperItemWeight;
-    String[] selfLinkedPatternItemType;
+    // Configurations of self-linked patterns
+    int[] selfLinkedSuperItemMapQ; // linked ARP SuperItem mapping quality
+    double[] selfLinkedSuperItemAF; // linked ARP SuperItem allele fraction
+    String[] selfLinkedPatternBpItemType; // Breakpoint SuperItem type
     
+    
+    // Configurations of pair-wise pattern linkage
     int[] arpSpanBpMapQ;
-    int[] arpSpanBpWeight;
+    double[] arpSpanBpAF;
     String[] arpSpanBPItem;
+    
+   
+    
     boolean arpSpanUseSplit = false;
     
     boolean hasSmallInsert = false;
@@ -211,11 +216,11 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
         return selfLinkedSuperItemMapQ;
     }
     
-    public int[] getSelfLinkedItemWeight(){
-        return selfLinkedSuperItemWeight;
+    public double[] getSelfLinkedItemAF(){
+        return selfLinkedSuperItemAF;
     }
     public String[] getSelfLinkedItemType(){
-        return selfLinkedPatternItemType;
+        return selfLinkedPatternBpItemType;
     }
     public int getSplitReadMapQ(){
         return splitReadMapQ;
@@ -224,22 +229,21 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
     public int[] getArpSpanMapQ(){
         return arpSpanBpMapQ;
     }
-    public int[] getArpSpanWeight(){
-        return arpSpanBpWeight;
+    public double[] getArpSpanAF(){
+        return arpSpanBpAF;
     }
     public String[] getArpSpanItemType(){
         return arpSpanBPItem;
-    }
+    }    
     
-    public boolean selfLinkedPatternMapQFilter(int minQ){
-        return selfLinkedSuperItemMapQ[0] >= selfLinkedSuperItemWeight[0] * minQ &&
-                selfLinkedSuperItemMapQ[1] >= selfLinkedSuperItemWeight[1] * minQ;
-    }
-    
-    
-    public int[] getSuspeticRegion(){
+    /**
+     * Return genome region that a pattern span
+     * @return 
+     */   
+    public int[] getPatternSpanRegion(){
         return new int[]{patternLeftMostPos, patternRightMostPos};
     }
+    
     
     public String toString(SequenceDatabase database){
         StringBuilder sb = new StringBuilder();
@@ -249,9 +253,7 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
             sb.append('(');
             sb.append(superitem.toConciseString());
             sb.append(')');
-//            sb.append(superitem.getType());                        
         }
-//        String str = sb.substring(0, sb.length() - 1);
         return sb.toString();
     }
     
@@ -336,9 +338,10 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
                     if (dist < closestToSplitAlign){
                         closestToSplitAlign = dist;                        
                         rightClosestSuperItemPos = superItem.getPos();
+                        
                     }
                 }
-                splitAlignCoords[1] = rightClosestSuperItemPos == -1?splitAlignCoords[1]:rightClosestSuperItemPos;
+                splitAlignCoords[1] = rightClosestSuperItemPos == -1 ? splitAlignCoords[1]:rightClosestSuperItemPos;
             }else if (splitAlignRightMatch >= 0){
                 pseudoSuperItem rightPSItem = superitems.get(splitAlignRightMatch);
                 String type = rightPSItem.getSuperItem(database).getType();
@@ -376,6 +379,15 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
         }
         return splitStatus;
     }
+    /**
+     * Check if coordinates of split aligned reads equals to Super-Item position in the pattern. 
+     * If it does, record the index of such Super-Item
+     * 
+     * @param database
+     * @param patternCandidates
+     * @param patternIdx
+     * @param splitAlignPos 
+     */
     public void splitAlignCheck(SequenceDatabase database, List<pseudoSequentialPattern> patternCandidates, Map<Integer, Integer> patternIdx, int[] splitAlignPos){                         
         
         splitAlignCoords = splitAlignPos;
@@ -394,21 +406,8 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
                 splitAlignRightMatch = i;
             }
         }
-        
-//        if (splitAlignLeftMatch == -1 || splitAlignRightMatch == -1){            
-//            for (int i = 0; i < patternCandidates.size() - 1; i++){
-//                if (patternIdx.containsKey(i)){
-//                    continue;
-//                }
-//                pseudoSequentialPattern matePattern = patternCandidates.get(i);                
-//                boolean islinked = splitAlignLink(database, matePattern, splitAlignCoords);
-//                if (islinked){
-//                    splitAlignMate = i;
-//                    break;
-//                }
-//            }
-//        }
     }
+    
     public boolean splitAlignLink(SequenceDatabase database, pseudoSequentialPattern matePattern, int[] expectedCoords){
 //        boolean isSplitAlignLinked = false;               
         List<pseudoSuperItem> mateSuperItems = matePattern.getSuperItems();
@@ -428,7 +427,8 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
         return onePartLinked&&otherPartLinked;
     }
     /**
-     * A pattern is self-linked by discordant read-pairs
+     * A pattern is self-linked by discordant read-pairs, indicates two ARP SuperItem linked.
+     * Use ARP SuperItem for boundary estimation if there dose not exit split align or clipped reads
      * @param database
      * @return 
      */
@@ -466,7 +466,7 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
 //                    SuperItem superItemTwo = searchSpace.get(machtedSuperItemIdx).getSuperItem(database);
                 SuperItem superItemTwo = ARPSuperItems.get(originalIdx).getSuperItem(database);
 
-                boolean isEnoughARPs = linker.supportARPs(superItemOne, superItemTwo);
+                boolean isEnoughARPs = linker.twoSuperItemLinkCheck(superItemOne, superItemTwo);
                 numOfLinkedEvidence = linker.getSupLink() > numOfLinkedEvidence ? linker.getSupLink():numOfLinkedEvidence;
                 if (isEnoughARPs){
                     
@@ -474,11 +474,11 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
                     int superItemOnePos = superItemOne.getPos();
                     int superItemTwoPos = superItemTwo.getPos();
                     if (superItemTwoPos > superItemOnePos){
-                        linkedPatterns[0] = curSuperItemIdx;
-                        linkedPatterns[1] = idxMap.get(machtedSuperItemIdx);
+                        linkedSuperItems[0] = curSuperItemIdx;
+                        linkedSuperItems[1] = idxMap.get(machtedSuperItemIdx);
                     }else{
-                        linkedPatterns[0] = idxMap.get(machtedSuperItemIdx);
-                        linkedPatterns[1] = curSuperItemIdx;
+                        linkedSuperItems[0] = idxMap.get(machtedSuperItemIdx);
+                        linkedSuperItems[1] = curSuperItemIdx;
                     }
                 }
             }
@@ -501,6 +501,7 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
         }
         return newSuperItems;
     }
+    
 
     public SuperItem getSuperItemFromOriginal(SequenceDatabase database, int idx){
         pseudoSuperItem item = superitems.get(idx);
@@ -561,7 +562,7 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
         }
         int[] coords = new int[2];
         arpSpanBpMapQ = new int[2];
-        arpSpanBpWeight = new int[2];
+        arpSpanBpAF = new double[2];
         arpSpanBPItem = new String[2];
         
         // Process the patten ahead.
@@ -570,11 +571,11 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
             if (superitem.isARPsuperitem()){
                 coords[0] = superitem.getPos();
                 arpSpanBpMapQ[0] = superitem.getSumMapQ();
-                arpSpanBpWeight[0] = superitem.getWeight();
+                arpSpanBpAF[0] = superitem.getRatio();
                 arpSpanBPItem[0] = superitem.getType();
 
                 arpLinkedBpHelper(false, 100, k, superitem.getPos(), superitem.getOri(), 
-                        database, coords, arpSpanBpMapQ, arpSpanBpWeight, arpSpanBPItem);                
+                        database, coords, arpSpanBpMapQ, arpSpanBpAF, arpSpanBPItem);                
             }
         }        
 
@@ -585,11 +586,11 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
             if (superitem.isARPsuperitem()){
                 coords[1] = superitem.getPos();
                 arpSpanBpMapQ[1] = superitem.getSumMapQ();
-                arpSpanBpWeight[1] = superitem.getWeight();
+                arpSpanBpAF[1] = superitem.getRatio();
                 arpSpanBPItem[1] = superitem.getType();
                 
                 matePattern.arpLinkedBpHelper(true, 100, k, superitem.getPos(), superitem.getOri(), 
-                        database, coords, arpSpanBpMapQ, arpSpanBpWeight, arpSpanBPItem);                                
+                        database, coords, arpSpanBpMapQ, arpSpanBpAF, arpSpanBPItem);                                
             }
         }
         if (coords[1] < coords[0]){
@@ -599,9 +600,21 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
         }
         return coords;
     }
-    
+    /**
+     * Estimate ARP linked pattern bps.
+     * @param isMate
+     * @param expDist
+     * @param arpItemIdx
+     * @param arpItemPos
+     * @param arpItemOri
+     * @param database
+     * @param coords
+     * @param arpBpMapQ
+     * @param aprBpAF
+     * @param arpBpItem 
+     */
     private void arpLinkedBpHelper(boolean isMate, int expDist, int arpItemIdx, int arpItemPos, String arpItemOri, 
-            SequenceDatabase database, int[] coords, int[] arpBpMapQ, int[] aprBpWeight, String[] arpBpItem){
+            SequenceDatabase database, int[] coords, int[] arpBpMapQ, double[] aprBpAF, String[] arpBpItem){
         
         if (arpItemOri.equals("+")){
             if (arpItemIdx < patternLength){
@@ -615,12 +628,12 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
                             if (!isMate){
                                 coords[0] = superitem.getPos(); 
                                 arpBpMapQ[0] = superitem.getSumMapQ();
-                                aprBpWeight[0] = superitem.getWeight();
+                                aprBpAF[0] = superitem.getRatio();
                                 arpBpItem[0] = superitem.getType();
                             }else{
                                 coords[1] = superitem.getPos(); 
                                 arpBpMapQ[1] = superitem.getSumMapQ();
-                                aprBpWeight[1] = superitem.getWeight();
+                                aprBpAF[1] = superitem.getRatio();
                                 arpBpItem[1] = superitem.getType();
                             }                 
  
@@ -639,12 +652,12 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
                             if (!isMate){
                                 coords[0] = superitem.getPos();
                                 arpBpMapQ[0] = superitem.getSumMapQ();
-                                aprBpWeight[0] = superitem.getWeight();
+                                aprBpAF[0] = superitem.getRatio();
                                 arpBpItem[0] = superitem.getType();
                             }else{
                                 coords[1] = superitem.getPos();
                                 arpBpMapQ[1] = superitem.getSumMapQ();
-                                aprBpWeight[1] = superitem.getWeight();
+                                aprBpAF[1] = superitem.getRatio();
                                 arpBpItem[1] = superitem.getType();
                             }
                             break;
@@ -664,12 +677,12 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
                             if (!isMate){
                                 coords[0] = superitem.getPos();
                                 arpBpMapQ[0] = superitem.getSumMapQ();
-                                aprBpWeight[0] = superitem.getWeight();
+                                aprBpAF[0] = superitem.getRatio();
                                 arpBpItem[0] = superitem.getType();
                             }else{
                                 coords[1] = superitem.getPos();
                                 arpBpMapQ[1] = superitem.getSumMapQ();
-                                aprBpWeight[1] = superitem.getWeight();
+                                aprBpAF[1] = superitem.getRatio();
                                 arpBpItem[1] = superitem.getType();
                             }
                             break;
@@ -687,12 +700,12 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
                             if (!isMate){
                                 coords[0] = superitem.getPos();
                                 arpBpMapQ[0] = superitem.getSumMapQ();
-                                aprBpWeight[0] = superitem.getWeight();
+                                aprBpAF[0] = superitem.getRatio();
                                 arpBpItem[0] = superitem.getType();
                             }else{
                                 coords[1] = superitem.getPos();
                                 arpBpMapQ[1] = superitem.getSumMapQ();
-                                aprBpWeight[1] = superitem.getWeight();
+                                aprBpAF[1] = superitem.getRatio();
                                 arpBpItem[1] = superitem.getType();
                             }                     
                         }
@@ -733,7 +746,8 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
             mStrings.add(matchedStr);
             sForwardStrings.add(clippedStr);
             sReverseStrings.add(clippedRevereStr);                
-        }        
+        }      
+        
         strMatcher.strCrossMatch(mStrings, sForwardStrings, sReverseStrings);
                 
         int numOfStrs = superitems.size();
@@ -832,18 +846,16 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
         
         return pos;
     }
-    
-    public boolean selfLinkedSuperItemMapQCheck(int minMapQ){
-        boolean isHighQ = true;
-        
-        int leftExpectedMin = selfLinkedSuperItemWeight[0] * minMapQ;
-        int rightExpectedMin = selfLinkedSuperItemWeight[1] * minMapQ;
-        
-        if (selfLinkedSuperItemMapQ[0] < leftExpectedMin || selfLinkedSuperItemMapQ[1] < rightExpectedMin){
-            isHighQ = false;
-        }
-        
-        return isHighQ;
+    /**
+     * Check self-linked pattern SuperItem allele fraction.
+     * @return 
+     */
+    public boolean selfLinkedSuperItemAfCheck(){     
+                
+        if (selfLinkedSuperItemAF[0] > 0.2 || selfLinkedSuperItemAF[1] > 0.2){
+            return true;
+        }        
+        return false;
     }
     
     /**
@@ -855,22 +867,22 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
         int[] pos = new int[]{-1,-1};
 //        int[] splitAlignPos = splitAlignForBP(database);
         
-        SuperItem leftARPItem = ARPSuperItems.get(linkedPatterns[0]).getSuperItem(database);
+        SuperItem leftARPItem = ARPSuperItems.get(linkedSuperItems[0]).getSuperItem(database);
         int leftARPpatternSuperItemPos = leftARPItem.getPos();
-        SuperItem rigthARPItem = ARPSuperItems.get(linkedPatterns[1]).getSuperItem(database);
+        SuperItem rigthARPItem = ARPSuperItems.get(linkedSuperItems[1]).getSuperItem(database);
         int rightARPpatternSuperItemPos = rigthARPItem.getPos();
         
         selfLinkedSuperItemMapQ = new int[2];
         selfLinkedSuperItemMapQ[0] = leftARPItem.getSumMapQ();
         selfLinkedSuperItemMapQ[1] = rigthARPItem.getSumMapQ();
         
-        selfLinkedSuperItemWeight = new int[2];
-        selfLinkedSuperItemWeight[0] = leftARPItem.getWeight();
-        selfLinkedSuperItemWeight[1] = rigthARPItem.getWeight();
+        selfLinkedSuperItemAF = new double[2];
+        selfLinkedSuperItemAF[0] = leftARPItem.getRatio();
+        selfLinkedSuperItemAF[1] = rigthARPItem.getRatio();
         
-        selfLinkedPatternItemType = new String[2];
-        selfLinkedPatternItemType[0] = leftARPItem.getType();
-        selfLinkedPatternItemType[1] = rigthARPItem.getType();
+        selfLinkedPatternBpItemType = new String[2];
+        selfLinkedPatternBpItemType[0] = leftARPItem.getType();
+        selfLinkedPatternBpItemType[1] = rigthARPItem.getType();
         
         int leftClosestToARP = -1;
         int rightClosestToARP = -1;
@@ -904,14 +916,14 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
         if (leftClosestToARP != -1 && rightClosestToARP != -1){
             pos[0] = superitems.get(leftClosestToARP).getSuperItem(database).getPos();
             pos[1] = superitems.get(rightClosestToARP).getSuperItem(database).getPos();
-            selfLinkedPatternItemType[0] = superitems.get(leftClosestToARP).getSuperItem(database).getType();
-            selfLinkedPatternItemType[1] = superitems.get(leftClosestToARP).getSuperItem(database).getType();
+            selfLinkedPatternBpItemType[0] = superitems.get(leftClosestToARP).getSuperItem(database).getType();
+            selfLinkedPatternBpItemType[1] = superitems.get(leftClosestToARP).getSuperItem(database).getType();
             
         }        
         else if (leftClosestToARP != -1){            
             SuperItem leftSuperItem = getSuperItemFromOriginal(database, leftClosestToARP);
             pos[0] = leftSuperItem.getPos();
-            selfLinkedPatternItemType[0] = leftSuperItem.getType();
+            selfLinkedPatternBpItemType[0] = leftSuperItem.getType();
             pos[1] = leftSuperItem.getSplitAlignPos();
             // Left clipped SuperItem dose not have supplementary alignments.
             if (pos[1] == -1 && rightClosestToARP > leftClosestToARP){
@@ -932,7 +944,7 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
         else if (rightClosestToARP != -1){
             SuperItem rightSuperItem = getSuperItemFromOriginal(database, rightClosestToARP);
             pos[1] = rightSuperItem.getPos();
-            selfLinkedPatternItemType[1] = rightSuperItem.getType();
+            selfLinkedPatternBpItemType[1] = rightSuperItem.getType();
             pos[0] = rightSuperItem.getSplitAlignPos();
             if (pos[0] == -1 && (leftClosestToARP != -1 && leftClosestToARP < rightClosestToARP)){
                 SuperItem leftSuperItem = getSuperItemFromOriginal(database, leftClosestToARP);
@@ -971,12 +983,13 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
             pseudoSuperItem psItem = ARPSuperItems.get(arpsNum - 1);
             SuperItem superItem = psItem.getSuperItem(database);
             
-            if (superItem.getSumMapQ() < superItem.getWeight() * minQ){
+            if (superItem.getSumMapQ() < superItem.getWeight() * minQ && superItem.getRatio() > 0.3){
                 return info;
             }
             
             info[0] = superItem.getPos();
             info[2] = superItem.getWeight();
+//            arpInferBpAF = superItem.getRatio();
             QueryInterval interval = superItem.getSuperitemMateRegion();
             if (superItem.getOri().equals("+")){
                 info[1] = interval.start;
@@ -1004,11 +1017,13 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
         // of the pattern
         info[0] = patternLeftMostPos;
         info[1] = patternRightMostPos;
-        info[2] = -2;
-        
-        if (!hasSmallInsert){
-            info = arpLinkInfer(database, minQ);
+        if (hasSmallInsert){
+            info[2] = -2;
         }
+                
+//        if (!hasSmallInsert){
+//            info = arpLinkInfer(database, minQ);
+//        }
         
         return info;
     }
@@ -1035,7 +1050,7 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
 //            }
             if (si.getType().equals("ARP_OEM") && si.getWeightRatio() >= 0.2){
                 info[2] = si.getWeight(); 
-                int[] bp = oemBpSearch(i, si.getOri(), si.getPos(), database);
+                int[] bp = oemBpSearch(i, si.getOri(), database);
                 if (bp[0]!=-1 && bp[1]!=-1){
                     info[0] = bp[0];
                     info[1] = bp[1];
@@ -1046,7 +1061,7 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
         return info;
     }
     
-    private int[] oemBpSearch(int oemIdx, String oemOri, int oemPos, SequenceDatabase database){
+    private int[] oemBpSearch(int oemIdx, String oemOri, SequenceDatabase database){
         int[] distToIdx;        
         int[] bp; 
         
@@ -1152,19 +1167,62 @@ public class pseudoSequentialPattern implements Comparable<pseudoSequentialPatte
         return bp;
     }
     
-    public int[] multiClippedPatternPosEstimate(SequenceDatabase database){
-        int[] info = new int[]{-1,-1};
-        int potentialBps = 0;
-        for (pseudoSuperItem item : MSSuperItems){
-            SuperItem si = item.getSuperItem(database);
-            if (si.getWeight() >= 10 && si.getWeightRatio() >= 0.2){
-                potentialBps += 1;
+    /**
+     * For patterns cannot exact BPs
+     * Check if it has multiple BP evidence, such as split-align, clipped reads and other signals, which might be a complex pattern
+     * @param database
+     * @return 
+     */
+    
+    public boolean isComplexPattern(SequenceDatabase database){
+        
+        Map<String, Integer> siTypeCount = new HashMap<String, Integer>();
+        boolean hasArp = false;
+        int clipNum = 0;
+        for (pseudoSuperItem item : superitems){
+            SuperItem si = item.getSuperItem(database); 
+            String siType = si.getType();
+            if (siType.contains("OEM")){
+                continue;
+            }
+            
+            if (!si.isARPsuperitem()){
+                if (siTypeCount.containsKey(si.getType())){
+                    clipNum += 1;
+                    int count = siTypeCount.get(si.getType()) + 1;
+                    siTypeCount.put(si.getType(), count);
+                }else{
+                    siTypeCount.put(si.getType(), 1);
+                }                
+            }else{               
+                hasArp = siType.contains("ARP_RR") || siType.contains("ARP_RF") || siType.contains("ARP_FF");
+                if (siTypeCount.containsKey(si.getType())){
+                    int count = siTypeCount.get(si.getType()) + 1;
+                    siTypeCount.put(si.getType(), count);
+                }else{
+                    siTypeCount.put(si.getType(), 1);
+                }
             }
         }
-        if (numOfBPs > 3 && potentialBps > numOfBPs / 2){
-            info[0] = patternLeftMostPos;
-            info[1] = patternRightMostPos;
-        }
-        return info;
+        double entropy = calPatternEntropy(siTypeCount);
+        return hasArp && clipNum > 2;
+        
     }
+    
+    private double calPatternEntropy(Map<String, Integer> map){      
+        double ent = 0;
+        int sum = 0;
+        List<Integer> countList = new ArrayList<>();
+        for (Entry<String, Integer> entry : map.entrySet()){
+            countList.add(entry.getValue());
+            sum += entry.getValue();
+        }     
+        for(int i = 0; i < countList.size(); i++){
+            double prob = (double) countList.get(i) / (double) sum;
+            double val = prob * (Math.log(prob)/Math.log(2));
+            ent-= val;
+        }        
+        return ent;
+    }
+    
 }

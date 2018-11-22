@@ -95,7 +95,7 @@ public class stringMatcher {
                     
                             
                     svOutInfo curSV = new svOutInfo(refRegionLeft + newLeftBpAtRef, refRegionLeft + newRightBpAtRef, 10, 
-                            superitem.getWeight(), superitem.getNumPlusRead(), superitem.getNumMinusRead());
+                            superitem.getWeight(), superitem.getRatio(), superitem.getNumPlusRead(), superitem.getNumMinusRead());
                     if (!alignedInfos.isEmpty()){
                         boolean exist = false;
                         for (svOutInfo preSV : alignedInfos){

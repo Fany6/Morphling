@@ -33,7 +33,7 @@ public class Linkage {
         return supLink;
     }
     
-    public boolean supportARPs(SuperItem superItemOne, SuperItem superItemTwo){
+    public boolean twoSuperItemLinkCheck(SuperItem superItemOne, SuperItem superItemTwo){
         boolean supported = false;
         String[] qnameOneByteList = superItemOne.getQNames();
         String[] qnameTwoByteList = superItemTwo.getQNames();
@@ -47,8 +47,7 @@ public class Linkage {
             if (uniqueQName.contains(qname)){
                 supportedARPs += 1;
                 if (supportedARPs > 1){
-                    supported = true;
-//                    break;                    
+                    supported = true;                   
                 }
             }
             uniqueQName.add(qname);

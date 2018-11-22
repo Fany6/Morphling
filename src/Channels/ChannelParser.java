@@ -58,9 +58,16 @@ public class ChannelParser {
         }
         
     }
-       
-     public void addSignals(MutSignal signal, int fragMean, int readLen){
-        String mutSignalType = signal.getMutSignalType();     
+    /**
+     * Only add mutational signals at current chrom
+     * @param signal
+     * @param fragMean
+     * @param readLen
+     * @param curRefName 
+     */
+     public void addSignals(MutSignal signal, int fragMean, int readLen, String curRefName){
+        String mutSignalType = signal.getMutSignalType();    
+        String signalRefName = signal.getSignalRef();
         if (writer != null){  
             try {
                 writer.write(signal.toString());
@@ -77,13 +84,13 @@ public class ChannelParser {
                 int forwardDistToLast = 0;
                 int reverseDistToLast = 0;
 
-                if (forwardMutSignals.isEmpty() && signal.getMutSignalOri().equals("+")){                
+                if (forwardMutSignals.isEmpty() && signal.getMutSignalOri().equals("+") && signalRefName.equals(curRefName)){                
                     forwardMutSignals.add(signal);
                 }
-                if (reverseMutSignals.isEmpty() && signal.getMutSignalOri().equals("-")){
+                if (reverseMutSignals.isEmpty() && signal.getMutSignalOri().equals("-") && signalRefName.equals(curRefName)){
                     reverseMutSignals.add(signal);
                 }
-                else{
+                else if (signalRefName.equals(curRefName)){
                     if (signal.getMutSignalOri().equals("+")){
                         MutSignal forwardLastSignal = forwardMutSignals.get(forwardMutSignals.size() - 1);
 
@@ -91,6 +98,7 @@ public class ChannelParser {
                         forwardDistToLast = signal.getMutPos() - forwardLastSignal.getMutPos();
                     }else{
                         MutSignal reverseLastSignal = reverseMutSignals.get(reverseMutSignals.size() - 1);
+
                         reverseMutSignals.add(signal);
                         reverseDistToLast = signal.getMutPos() - reverseLastSignal.getMutPos();
                     }
@@ -277,8 +285,7 @@ public class ChannelParser {
                 if (cluster.size() < 3){
                     cluster.clear();
                 }else{                    
-                    SuperItem superItem = new SuperItem(cluster);       
-                    
+                    SuperItem superItem = new SuperItem(cluster);                           
 //                    superitemList.add(superItem);
                     addSuperItem(superItem);
                     cluster.clear();
@@ -313,6 +320,11 @@ public class ChannelParser {
                 int endIndexPreBuffer = preReadDepthBuffer.length + superItemIntervalEnd;
                 int startIndexPreBuffer = preReadDepthBuffer.length + superItemIntervalStart;
                 for (int i = startIndexPreBuffer; i < endIndexPreBuffer ; i ++){
+                    try {
+                        nreadSum += preReadDepthBuffer[i];
+                    } catch (Exception e) {
+                        System.err.println("error");
+                    }
                     nreadSum += preReadDepthBuffer[i];
                 }
                 superItemCov = (double) nreadSum / (superItemIntervalEnd - superItemIntervalStart);
@@ -321,5 +333,5 @@ public class ChannelParser {
             }                                        
             superItem.setARPsuperitemRatio(superItemCov);
         }        
-    }       
+    }
 }

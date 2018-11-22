@@ -13,6 +13,11 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 
 import Channels.*;
+import contiguousfspm.pseudoSequentialPattern;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
 /**
  *
  * @author jiadonglin
@@ -54,7 +59,7 @@ public class SignalReader {
     private int numOfARPs;
     private int numOfRPs;
     
-    
+    private Map<String, List<int[]>> maskedRegion;
     
     public SignalReader(int fragMean, int fragStd, int cutStd, int readLen, int maxDist, int minMapQ){
         isizeUpper = fragMean + cutStd * fragStd;
@@ -121,7 +126,7 @@ public class SignalReader {
         fileReader myFileReader = new fileReader();        
         final SamReader samReader = myFileReader.openBamFile(bamFile, ValidationStringency.SILENT, false);
         
-        CigarOps cigarOper = new CigarOps();
+//        CigarOps cigarOper = new CigarOps();
         myFileReader.readFaIdxFile(fastaIndexFile, chromNameMap, chromLengthMap);       
         // access user specified region
         if (chrom != null){  
@@ -133,7 +138,7 @@ public class SignalReader {
             int refSequenceLength = refSequenceRecord.getSequenceLength();           
             int nWindows = refSequenceLength / readDepthContainerBuffer;
             
-                        
+                  
             
             if (regionStart != 0 && regionEnd != 0){
                 refSequenceLength = regionEnd - regionStart + 1;
@@ -154,7 +159,7 @@ public class SignalReader {
                 windowEnd = windowStart + readDepthContainerBuffer;                 
                 SAMRecordIterator iterator = samReader.query(chrom, windowStart, windowEnd, false);               
                 
-                analysisAlignment(iterator, windowStart, cigarOper);                
+                analysisAlignment(iterator, windowStart, chrom);                
                 processRemainingSignals();
                 int curBinSuperitemCount = assignReadDepthAndCountSuperItem(windowStart, readDepthContainerBuffer, readDepthPreStepBuffer); 
                 System.out.println("processed region: [" + windowStart + ", " + windowEnd + "] " + "#superitems: " + curBinSuperitemCount);
@@ -170,7 +175,7 @@ public class SignalReader {
             }
             // process remaining alignment in BAM
             SAMRecordIterator iterator = samReader.query(chrom, windowStart, refSequenceLength, false);
-            analysisAlignment(iterator, windowStart, cigarOper);
+            analysisAlignment(iterator, windowStart, chrom);
             processRemainingSignals();
             int curBinSuperitemCount = assignReadDepthAndCountSuperItem(windowStart, readDepthContainerBuffer, readDepthPreStepBuffer); 
             
@@ -197,7 +202,7 @@ public class SignalReader {
                     windowEnd = windowStart + readDepthContainerBuffer;                 
                     iterator = samReader.query(curChrom, windowStart, windowEnd, false);
                     
-                    analysisAlignment(iterator, windowStart, cigarOper);                
+                    analysisAlignment(iterator, windowStart,curChrom);                
                     processRemainingSignals();
                     int curBinSuperitemCount = assignReadDepthAndCountSuperItem(windowStart, readDepthContainerBuffer, readDepthPreStepBuffer); 
                     System.out.println("processed region: [" + windowStart + ", " + windowEnd + "] " + "#superitems: " + curBinSuperitemCount);
@@ -210,7 +215,7 @@ public class SignalReader {
                     
                 }
                 iterator = samReader.query(curChrom, windowStart, refSequenceLength, false);
-                analysisAlignment(iterator, windowStart, cigarOper);
+                analysisAlignment(iterator, windowStart, curChrom);
                 processRemainingSignals();
                 int curBinSuperitemCount = assignReadDepthAndCountSuperItem(windowStart, readDepthContainerBuffer, readDepthPreStepBuffer); 
                 System.out.println("processed region: [" + windowStart + ", " + refSequenceLength + "] " + "#superitems: " + curBinSuperitemCount);
@@ -229,26 +234,17 @@ public class SignalReader {
      * @param windowStart
      * @param cigarOper 
      */
-    private void analysisAlignment(SAMRecordIterator iterator, int windowStart, CigarOps cigarOper){
+    private void analysisAlignment(SAMRecordIterator iterator, int windowStart, String curRefName){
 //        CigarOps corasenCigar = new CigarOps();
         while(iterator.hasNext()){
-            SAMRecord record = iterator.next();
-            int mapq = record.getMappingQuality();  
-            
+            SAMRecord record = iterator.next();                        
 //            int recordChrIdx = record.getReferenceIndex();
 //            String recordChrName = record.getReferenceName();
-            
-//            if (!idxToChromMap.containsKey(recordChrIdx)){
-//                idxToChromMap.put(recordChrIdx, recordChrName);
-//            }
-
-            // Discard reads of low quality and PCR duplicated reads
-            if (mapq <= minMapQ || record.getDuplicateReadFlag()){
-                continue;
-            }            
+                       
+           
             List<CigarElement> cigarElements = record.getCigar().getCigarElements();
             
-            if (badReads(cigarElements)){
+            if (badReads(cigarElements, record.getMappingQuality()) || record.getDuplicateReadFlag()){
                 continue;
             }
             // count the number of normal read per base
@@ -257,9 +253,9 @@ public class SignalReader {
                 updateReadDepthArray(record.getAlignmentStart(), isGoodAlign, windowStart);
             }                                      
            
-            SEClippedParser(record, cigarElements, cigarOper);   
-            RPUnmappedParser(record);
-            RPisizeParser(record, cigarElements);
+            SEClippedParser(record, cigarElements, curRefName);   
+            RPUnmappedParser(record, curRefName);
+            RPisizeParser(record, cigarElements, curRefName);
             
             if (!rpTracker.containsKey(record.getReadName())){
                 List<SAMRecord> records = new ArrayList<>();
@@ -269,29 +265,13 @@ public class SignalReader {
                 List<SAMRecord> records = rpTracker.get(record.getReadName());
                 records.add(record);
                 numOfRPs += 1;
-                RPoriParser(records, cigarElements);
+                RPoriParser(records, cigarElements, curRefName);
                 rpTracker.remove(record.getReadName());
             }                
             
             
         } 
         iterator.close();
-    }
-    /**
-     * There might exist overlapped alignment when library insert size is smaller than 2*readlen
-     * We would not suggest use such BAM files to call SVs
-     * @param record 
-     * @return 
-     */    
-    private boolean overlappedAlign(SAMRecord record){
-        int alignStart = record.getAlignmentStart();
-        int alignEnd = record.getAlignmentEnd();
-        int mateAlignStart = record.getMateAlignmentStart();
-        boolean isOverlap = false;
-        if (mateAlignStart >= alignStart && mateAlignStart <= alignEnd){
-            isOverlap = true;
-        }
-        return isOverlap;
     }
     
     /**
@@ -310,11 +290,11 @@ public class SignalReader {
         return newBuffer;
     }
     /**
-     * Discard reads of clipped length longer than 70% of the read length 
+     * Discard reads of clipped length longer than 70% of the read length and reads with low mapping quality
      * @param cigarElements
      * @return 
      */
-    private boolean badReads(List<CigarElement> cigarElements){
+    private boolean badReads(List<CigarElement> cigarElements, int quality){
         int clippedLength = 0;
         boolean isBad = false;
         for (CigarElement element : cigarElements){
@@ -325,6 +305,9 @@ public class SignalReader {
             }
         }
         if (clippedLength > 0.7 * readLen){
+            isBad = true;
+        }
+        if (quality <= minMapQ){
             isBad = true;
         }
         return isBad;
@@ -373,10 +356,10 @@ public class SignalReader {
      * @param cigarOper 
      */
     
-    private void SEClippedParser(SAMRecord record, List<CigarElement> cigarElements, CigarOps cigarOper) {
+    private void SEClippedParser(SAMRecord record, List<CigarElement> cigarElements, String curRefName) {
         // For a mapped read and read of relatively high mapQ
         if (!record.getReadUnmappedFlag()){
-
+            CigarOps cigarOper = new CigarOps(record);
             String firstOperation = cigarElements.get(0).getOperator().toString();
                         
             
@@ -384,8 +367,8 @@ public class SignalReader {
             int qsPos = cigarOper.getqsPos();
             
             String cigarStr = cigarOper.getCigarStr();
-            int mutCoord = record.getAlignmentStart();
-            
+            int mutCoord = record.getAlignmentStart();           
+                                    
             if (!cigarStr.equals("M") && !cigarStr.isEmpty()){
                 if (firstOperation.equals("M")){                    
                     mutCoord += qsPos;                
@@ -398,7 +381,7 @@ public class SignalReader {
                 MutSignal mutSignal = new MutSignal(record, cigarStr, mutCoord, ori);
                 mutSignal.setIsizeNormal(isizeUpper, isizeLower);
 
-                breakChannel.addSignals(mutSignal, fragMean, readLen);
+                breakChannel.addSignals(mutSignal, fragMean, readLen, curRefName);
             }
         }
         
@@ -409,7 +392,7 @@ public class SignalReader {
      * @param record
      * @return 
      */
-    private void RPUnmappedParser(SAMRecord record){
+    private void RPUnmappedParser(SAMRecord record, String curRefName){
         
         // read unmapped
         if (record.getReadUnmappedFlag()){
@@ -419,7 +402,7 @@ public class SignalReader {
             MutSignal mutSignal = new MutSignal(record, "ARP_OEM", mutCoord, ori);
             mutSignal.setIsizeNormal(isizeUpper, isizeLower);
            
-            oemChannel.addSignals(mutSignal, fragMean, readLen);
+            oemChannel.addSignals(mutSignal, fragMean, readLen, curRefName);
             numOfARPs += 1;
 
         }else if (record.getMateUnmappedFlag()){
@@ -429,7 +412,7 @@ public class SignalReader {
             MutSignal mutSignal = new MutSignal(record, "ARP_OEM", mutCoord, ori);
             mutSignal.setIsizeNormal(isizeUpper, isizeLower);
                         
-            oemChannel.addSignals(mutSignal, fragMean, readLen);
+            oemChannel.addSignals(mutSignal, fragMean, readLen, curRefName);
             numOfARPs += 1;
         }
 
@@ -439,7 +422,7 @@ public class SignalReader {
      * @param record
      * @param cigarElements 
      */
-    private void RPisizeParser(SAMRecord record, List<CigarElement> cigarElements){
+    private void RPisizeParser(SAMRecord record, List<CigarElement> cigarElements, String curRefName){
         // only process read-pair mapped on the same chrom.
        
         CigarElement leftMostCigarElement = cigarElements.get(0);
@@ -460,7 +443,7 @@ public class SignalReader {
 //            MutSignal mutSignal = new MutSignal(record.getReadName(), record.getReferenceIndex(), record.getReferenceName(), 
 //                        record.getInferredInsertSize(), "ARP_LARGE_INSERT", mutCoord, ori, record.getAlignmentStart(), record.getMateAlignmentStart());
             mutSignal.setIsizeNormal(isizeUpper, isizeLower);
-            isizeLargeChannel.addSignals(mutSignal, fragMean, readLen);            
+            isizeLargeChannel.addSignals(mutSignal, fragMean, readLen, curRefName);            
             numOfARPs += 1;
         }
         else if (Math.abs(insertSize) <= isizeLower && insertSize != 0){
@@ -470,25 +453,25 @@ public class SignalReader {
 //                record.getInferredInsertSize(), "ARP_SMALL_INSERT", mutCoord, ori, record.getAlignmentStart(), record.getMateAlignmentStart());
             mutSignal.setIsizeNormal(isizeUpper, isizeLower);
 
-            isizeSmallChannel.addSignals(mutSignal, fragMean, readLen); 
+            isizeSmallChannel.addSignals(mutSignal, fragMean, readLen, curRefName); 
             numOfARPs += 1;
             
         }
                 
     }
     /**
-     * Process PE of abnormal alignment orientation
+     * Process read pairs with abnormal orientation
      * @param records
      * @param cigarElements 
      */
-    private void RPoriParser(List<SAMRecord> records, List<CigarElement> cigarElements){
+    private void RPoriParser(List<SAMRecord> records, List<CigarElement> cigarElements, String curRefName){
         
         SAMRecord leftMostRecord = records.get(0);
         SAMRecord rightMostRecord = records.get(records.size() - 1);
         // For read-pair, it should be proper paired. Its read and mate are all mapped.
         if (leftMostRecord.getReadPairedFlag() && !leftMostRecord.getReadUnmappedFlag() && !leftMostRecord.getMateUnmappedFlag()){
             int mutCoord = leftMostRecord.getAlignmentStart();
-            if (leftMostRecord.getReadNegativeStrandFlag()== leftMostRecord.getMateNegativeStrandFlag()){
+            if (leftMostRecord.getReadNegativeStrandFlag() == leftMostRecord.getMateNegativeStrandFlag()){
                 String mutType;
                 String ori = leftMostRecord.getReadNegativeStrandFlag() ? "-":"+";
                 if (leftMostRecord.getReadNegativeStrandFlag()){
@@ -508,8 +491,8 @@ public class SignalReader {
                 MutSignal mateMutSignal = new MutSignal(leftMostRecord, mutType, rightMostRecord.getMateAlignmentStart(), ori);
                 mateMutSignal.setIsizeNormal(isizeUpper, isizeLower);   
 
-                oriChannel.addSignals(readMutSignal, fragMean, readLen);
-                oriChannel.addSignals(mateMutSignal, fragMean, readLen);
+                oriChannel.addSignals(readMutSignal, fragMean, readLen, curRefName);
+                oriChannel.addSignals(mateMutSignal, fragMean, readLen, leftMostRecord.getMateReferenceName());
                 numOfARPs += 1;
             }
             else if (leftMostRecord.getReadNegativeStrandFlag() && !leftMostRecord.getMateNegativeStrandFlag()){
@@ -520,8 +503,8 @@ public class SignalReader {
                 MutSignal mateMutSignal = new MutSignal(leftMostRecord, mutType, rightMostRecord.getMateAlignmentStart(), "+");
                 mateMutSignal.setIsizeNormal(isizeUpper, isizeLower);
 
-                oriChannel.addSignals(readMutSignal, fragMean, readLen);
-                oriChannel.addSignals(mateMutSignal, fragMean, readLen);
+                oriChannel.addSignals(readMutSignal, fragMean, readLen, curRefName);
+                oriChannel.addSignals(mateMutSignal, fragMean, readLen, leftMostRecord.getMateReferenceName());
 
                 numOfARPs += 1;
             }
@@ -582,10 +565,15 @@ public class SignalReader {
 
     }
     
+    private boolean goodClippedRead(CigarOps cigarOps){
+        int[] clippedLength = cigarOps.getClippedStatus();
+        return clippedLength[0] >= 0.05 * readLen || clippedLength[1] >= 0.05 * readLen; 
+    }
+    
     public int getWGARPNum(){
         return numOfARPs;
     }    
-
+        
     public void printSuperItemGeneratorStats(){
         StringBuilder sb = new StringBuilder();
         sb.append("\n==============  SuperItem Generation =============\n");

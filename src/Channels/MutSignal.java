@@ -80,7 +80,7 @@ public class MutSignal implements Comparable<MutSignal>{
             isARP = true;
         }   
         if (record.isSecondaryAlignment()){           
-            splitAlignPos = decodeSplitAlign(record.getAttribute("SA").toString());            
+            splitAlignPos = decodeSplitAlign(record.getAttribute("SA").toString(), mapQ);            
         }
         if (!signalRefName.equals(signalMateRefName)){
             isInterChrom = true;
@@ -191,13 +191,13 @@ public class MutSignal implements Comparable<MutSignal>{
         }
     }
     
-    private int decodeSplitAlign(String splitAlignString){
+    private int decodeSplitAlign(String splitAlignString, int mapQ){
         
         String[] tokens = splitAlignString.split(",");        
         splitAlignChr = tokens[0];
         int pos = Integer.parseInt(tokens[1]);
         
-        if (splitAlignChr.equals(signalRefName)){
+        if (splitAlignChr.equals(signalRefName) && mapQ >= 20){
             isSplitAlign = true;
             List<myCigarOp> cigarOps = getSplitAlignPosFromCigarString(tokens[3]);                    
             myCigarOp firstOp = cigarOps.get(0);
