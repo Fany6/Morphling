@@ -1,5 +1,5 @@
 # Morphling
-A ultra-fast model free framework for structural variants discovery
+An ultra-fast model free framework for structural variants discovery
 
 Current version: 
 MorphReleaseV1.0 
@@ -33,11 +33,11 @@ Java –jar MorphReleaseV1.jar
 
 •	Mode one example:
 
-Java –jar MophReleaseV1.jar bamFile=file.bam faFile=file.fa bamCfg=bam.cfg itemOut=item.txt svOut=sv.out regionMask=region.bed
+Java –jar MophReleaseV1.jar bamFile=file.bam faFile=file.fa bamCfg=bam.cfg regionMask=region.bed
 
 •	Mode two example:
 
-Java –jar MophReleaseV1.jar faFile=file.fa bamCfg=bam.cfg itemOut=item.txt svOut=sv.out regionMask=region.bed
+Java –jar MophReleaseV1.jar faFile=file.fa bamCfg=bam.cfg itemOut=item.txt regionMask=region.bed
 
 Output format:
 
