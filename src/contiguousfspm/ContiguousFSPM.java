@@ -1025,7 +1025,11 @@ public class ContiguousFSPM {
         }                
     }
     
-    
+    /**
+     * A pattern might find more than one mates, mate with most read pair support is used.
+     * @param mateInfo
+     * @return 
+     */
     private int[] getMateWithMostSup(List<int[]> mateInfo){
         if (mateInfo.size() == 1){
             return mateInfo.get(0);
