@@ -19,7 +19,7 @@ $ samtools view your.bam | python bamConfig.py -X 3 -N 30000
 ```
 To get help info
 ```
-$ java /your/path/to/Morphling/dist/MorphReleaseV1.jar
+$ java /path/to/Morphling/dist/MorphReleaseV1.jar
 ```
 
 Run mode one example: run with BAM file, and your can either output all SuperItems to file or keep it in the memory. It is suggested to keep them in file, since you won't need to go through the BAM file agian for next run with different parameters.
