@@ -28,9 +28,9 @@ $ java -jar /path/to/Morphling/dist/MorphRealeaseV1.jar bamFile=file.bam faFile=
 ```
 Run mode two example: run on SuperItem files directly without BAM file
 
-'''
+```
 $ java -jar /path/to/Morphling/dist/MorphRealeaseV1.jar faFile=file.fa itemOut=item.txt
-'''
+```
 
 #### Output format
 
